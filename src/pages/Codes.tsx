@@ -122,6 +122,8 @@ export default function Codes() {
   }, [])
 
   const runActive = isRunActive(publishRun)
+  const publishDisabled =
+    publishing || runActive || pendingChanges === null || pendingChanges === 0
 
   // Nashr ishlayotganida holatni tez-tez (5 s), aks holda kamdan-kam (30 s) tekshiramiz.
   useEffect(() => {
@@ -150,7 +152,7 @@ export default function Codes() {
   }, [runActive, publishRun, t])
 
   async function publishWebsiteData() {
-    if (publishing || runActive || pendingChanges === 0) return
+    if (publishDisabled) return
     setPublishing(true)
     setError('')
     setSuccess('')
@@ -403,7 +405,7 @@ export default function Codes() {
                 type="button"
                 className={`button button-quiet publish-icon-button${publishing || runActive ? ' is-publishing' : ''}`}
                 onClick={() => void publishWebsiteData()}
-                disabled={publishing || runActive || pendingChanges === 0}
+                disabled={publishDisabled}
                 aria-busy={publishing || runActive}
                 aria-label={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
                 title={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
