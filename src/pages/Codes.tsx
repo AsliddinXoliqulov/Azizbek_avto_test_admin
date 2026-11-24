@@ -150,7 +150,7 @@ export default function Codes() {
   }, [runActive, publishRun, t])
 
   async function publishWebsiteData() {
-    if (publishing) return
+    if (publishing || runActive || pendingChanges === 0) return
     setPublishing(true)
     setError('')
     setSuccess('')
@@ -403,7 +403,7 @@ export default function Codes() {
                 type="button"
                 className={`button button-quiet publish-icon-button${publishing || runActive ? ' is-publishing' : ''}`}
                 onClick={() => void publishWebsiteData()}
-                disabled={publishing || runActive}
+                disabled={publishing || runActive || pendingChanges === 0}
                 aria-busy={publishing || runActive}
                 aria-label={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
                 title={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
