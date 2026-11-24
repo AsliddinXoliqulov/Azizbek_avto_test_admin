@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { PageHeader } from '../App'
 import { useConfirm } from '../components/ConfirmProvider'
@@ -8,6 +8,16 @@ import { requireSupabase } from '../lib/supabase'
 import { useSiteLanguage } from '../lib/siteLanguage'
 import type { ActivationToken } from '../lib/types'
 import { getErrorMessage } from '../lib/types'
+
+interface PublishRun {
+  status: string
+  conclusion: string | null
+  url: string
+  createdAt: number
+}
+
+const isRunActive = (run: PublishRun | null) =>
+  run !== null && ['queued', 'in_progress', 'waiting', 'requested', 'pending'].includes(run.status)
 
 export default function Codes() {
   const confirm = useConfirm()
@@ -20,6 +30,9 @@ export default function Codes() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [pendingChanges, setPendingChanges] = useState<number | null>(null)
+  const [publishRun, setPublishRun] = useState<PublishRun | null>(null)
+  const wasRunActive = useRef(false)
+  const dispatchedAt = useRef(0)
   const [pendingStatusError, setPendingStatusError] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -82,6 +95,25 @@ export default function Codes() {
         throw new Error('Nashr holati noto‘g‘ri javob qaytardi.')
       }
       setPendingChanges(result.pendingChanges)
+      const nextRun: PublishRun | null =
+        result.run && typeof result.run.status === 'string'
+          ? {
+              status: result.run.status,
+              conclusion: typeof result.run.conclusion === 'string' ? result.run.conclusion : null,
+              url: typeof result.run.url === 'string' ? result.run.url : '',
+              createdAt: Date.parse(result.run.createdAt) || 0,
+            }
+          : null
+      // Tugma bosilgandan keyin GitHub yangi ishni yaratguncha oldingi (eski) ish natijasi ko'rsatilmaydi.
+      const waitingSince = dispatchedAt.current
+      const isStale =
+        waitingSince > 0 &&
+        Date.now() - waitingSince < 90_000 &&
+        (!nextRun || nextRun.createdAt < waitingSince - 30_000)
+      if (!isStale) {
+        if (nextRun && nextRun.createdAt >= waitingSince - 30_000) dispatchedAt.current = 0
+        setPublishRun(nextRun)
+      }
       setPendingStatusError('')
     } catch (reason) {
       setPendingChanges(null)
@@ -89,11 +121,33 @@ export default function Codes() {
     }
   }, [])
 
+  const runActive = isRunActive(publishRun)
+
+  // Nashr ishlayotganida holatni tez-tez (5 s), aks holda kamdan-kam (30 s) tekshiramiz.
   useEffect(() => {
     void loadPublishStatus()
-    const timer = window.setInterval(() => void loadPublishStatus(), 30_000)
+    const timer = window.setInterval(
+      () => void loadPublishStatus(),
+      runActive ? 5_000 : 30_000
+    )
     return () => window.clearInterval(timer)
-  }, [loadPublishStatus])
+  }, [loadPublishStatus, runActive])
+
+  // GitHub Action tugaganda natijani adminga ko'rsatamiz.
+  useEffect(() => {
+    if (wasRunActive.current && !runActive && publishRun) {
+      if (publishRun.conclusion === 'success') {
+        setError('')
+        setSuccess(t('Nashr tugadi. Vercel saytni 1–2 daqiqada yangilaydi.'))
+      } else {
+        setSuccess('')
+        setError(
+          `${t('Nashr xato bilan tugadi.')} ${publishRun.url ? `GitHub Actions: ${publishRun.url}` : ''}`.trim()
+        )
+      }
+    }
+    wasRunActive.current = runActive
+  }, [runActive, publishRun, t])
 
   async function publishWebsiteData() {
     if (publishing) return
@@ -123,7 +177,10 @@ export default function Codes() {
           ? result.message
           : t('Sayt ma’lumotlarini nashr qilish boshlandi.')
       )
-      void loadPublishStatus()
+      wasRunActive.current = true
+      dispatchedAt.current = Date.now()
+      setPublishRun({ status: 'queued', conclusion: null, url: '', createdAt: Date.now() })
+      window.setTimeout(() => void loadPublishStatus(), 4_000)
     } catch (reason) {
       setError(getErrorMessage(reason))
     } finally {
@@ -344,21 +401,21 @@ export default function Codes() {
               )}
               <button
                 type="button"
-                className={`button button-quiet publish-icon-button${publishing ? ' is-publishing' : ''}`}
+                className={`button button-quiet publish-icon-button${publishing || runActive ? ' is-publishing' : ''}`}
                 onClick={() => void publishWebsiteData()}
-                disabled={publishing}
-                aria-busy={publishing}
-                aria-label={t(publishing ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
-                title={t(publishing ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
+                disabled={publishing || runActive}
+                aria-busy={publishing || runActive}
+                aria-label={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
+                title={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
               >
-                {publishing ? (
+                {publishing || runActive ? (
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="8" />
                   </svg>
                 ) : (
                   <wa-icon name="share-nodes" aria-hidden="true"></wa-icon>
                 )}
-                <span>{t(publishing ? 'Nashr…' : 'Birlashtirish')}</span>
+                <span>{t(publishing || runActive ? 'Nashr…' : 'Birlashtirish')}</span>
               </button>
             </div>
           </div>

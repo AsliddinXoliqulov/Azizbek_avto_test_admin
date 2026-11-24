@@ -78,7 +78,7 @@ tokenni frontend kodiga yoki repoga qo‘ymang.
 
 Admin paneldagi **Kodlar → Sayt ma’lumotlarini nashr qilish** tugmasi GitHub Actions’ni
 ishga tushiradi. Jarayon savol/katalog snapshot’ini va kerakli rasmlarni Supabase’dan
-olib `AsliddinXoliqulov/Azizbek_avto_test_ilova` repozitoriga push qiladi; Vercel
+olib `AsliddinXoliqulov/Azizbek_avto_test_ilova_sayt` repozitoriga push qiladi; Vercel
 push’dan keyin saytni qayta deploy qiladi. Sayt build’i uchun `VITE_SUPABASE_URL` va
 `VITE_SUPABASE_ANON_KEY` kerak bo‘ladi; bu qiymatlar aktivatsiya uchun, brauzer
 bundle’iga `service_role` kalit qo‘yilmaydi.

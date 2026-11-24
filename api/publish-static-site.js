@@ -1,8 +1,11 @@
 import { verifyActiveAdmin } from '../server/adminAuth.js'
-
-const REPOSITORY = 'AsliddinXoliqulov/Azizbek_avto_test_ilova'
-const WORKFLOW = 'publish-static-site.yml'
-const BRANCH = 'main'
+import {
+  PUBLISH_WORKFLOW,
+  SITE_BRANCH,
+  SITE_REPOSITORY,
+  explainGithubFailure,
+  githubHeaders,
+} from '../server/github.js'
 
 function send(res, status, body) {
   res.setHeader('Cache-Control', 'no-store')
@@ -20,25 +23,22 @@ export default async function handler(req, res) {
     if (!admin.ok) return send(res, admin.status, { error: admin.error })
 
     const dispatchResponse = await fetch(
-      `https://api.github.com/repos/${REPOSITORY}/actions/workflows/${WORKFLOW}/dispatches`,
+      `https://api.github.com/repos/${SITE_REPOSITORY}/actions/workflows/${PUBLISH_WORKFLOW}/dispatches`,
       {
         method: 'POST',
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${admin.githubToken}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ref: BRANCH }),
+        headers: githubHeaders(admin.githubToken, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ ref: SITE_BRANCH }),
       }
     )
     if (!dispatchResponse.ok) {
-      console.error('[publish] GitHub workflow dispatch failed:', dispatchResponse.status)
-      return send(res, 502, { error: 'GitHub nashr jarayonini boshlay olmadi.' })
+      const failure = await explainGithubFailure(dispatchResponse, 'Nashrni boshlab bo‘lmadi')
+      return send(res, 502, failure)
     }
 
     return send(res, 202, {
-      message: 'Savol va rasmlarini GitHub/Vercel’ga nashr qilish boshlandi.',
+      message:
+        'Nashr boshlandi: savollar va rasmlar Supabase’dan olinib sayt repozitoriyasiga yuklanmoqda. ' +
+        'Tugagach Vercel saytni avtomatik yangilaydi.',
     })
   } catch (error) {
     console.error('[publish] Nashrni boshlashda xatolik:', error)

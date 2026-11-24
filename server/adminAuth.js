@@ -3,11 +3,21 @@ export async function verifyActiveAdmin(req) {
   const anonKey = process.env.SUPABASE_ANON_KEY
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const githubToken = process.env.GITHUB_WORKFLOW_TOKEN
-  if (!supabaseUrl || !anonKey || !serviceRoleKey || !githubToken) {
+  const missing = [
+    ['SUPABASE_URL', supabaseUrl],
+    ['SUPABASE_ANON_KEY', anonKey],
+    ['SUPABASE_SERVICE_ROLE_KEY', serviceRoleKey],
+    ['GITHUB_WORKFLOW_TOKEN', githubToken],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name)
+  if (missing.length > 0) {
     return {
       ok: false,
       status: 500,
-      error: 'Nashr xizmati sozlanmagan. Vercel muhit o‘zgaruvchilarini tekshiring.',
+      error:
+        'Nashr xizmati sozlanmagan. Vercel (admin panel loyihasi) → Settings → Environment Variables ' +
+        `bo‘limida quyidagilar yo‘q: ${missing.join(', ')}. Qo‘shgach loyihani Redeploy qiling.`,
     }
   }
 

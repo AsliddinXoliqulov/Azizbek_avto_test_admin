@@ -1,11 +1,40 @@
 import { verifyActiveAdmin } from '../server/adminAuth.js'
-
-const REPOSITORY = 'AsliddinXoliqulov/Azizbek_avto_test_ilova'
-const BRANCH = 'main'
+import {
+  PUBLISH_WORKFLOW,
+  SITE_BRANCH,
+  SITE_REPOSITORY,
+  explainGithubFailure,
+  githubHeaders,
+} from '../server/github.js'
 
 function send(res, status, body) {
   res.setHeader('Cache-Control', 'no-store')
   res.status(status).json(body)
+}
+
+// Oxirgi workflow ishining holati (kutmoqda / ishlayapti / tugadi + natija).
+async function latestRun(token) {
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${SITE_REPOSITORY}/actions/workflows/${PUBLISH_WORKFLOW}/runs` +
+        `?event=workflow_dispatch&branch=${encodeURIComponent(SITE_BRANCH)}&per_page=1`,
+      { headers: githubHeaders(token) }
+    )
+    if (!response.ok) return null
+    const body = await response.json()
+    const run = Array.isArray(body.workflow_runs) ? body.workflow_runs[0] : null
+    if (!run) return null
+    return {
+      status: run.status,
+      conclusion: run.conclusion,
+      url: run.html_url,
+      createdAt: run.created_at,
+      updatedAt: run.updated_at,
+    }
+  } catch (error) {
+    console.error('[publish-status] Oxirgi ish holatini olib bo‘lmadi:', error)
+    return null
+  }
 }
 
 export default async function handler(req, res) {
@@ -19,14 +48,8 @@ export default async function handler(req, res) {
     if (!admin.ok) return send(res, admin.status, { error: admin.error })
 
     const versionResponse = await fetch(
-      `https://api.github.com/repos/${REPOSITORY}/contents/public/data/version.json?ref=${BRANCH}`,
-      {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${admin.githubToken}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-      }
+      `https://api.github.com/repos/${SITE_REPOSITORY}/contents/public/data/version.json?ref=${SITE_BRANCH}`,
+      { headers: githubHeaders(admin.githubToken) }
     )
     let since = new Date(0).toISOString()
     if (versionResponse.ok) {
@@ -40,8 +63,9 @@ export default async function handler(req, res) {
         since = new Date(publishedTime).toISOString()
       }
     } else if (versionResponse.status !== 404) {
-      console.error('[publish-status] GitHub versiya javobi:', versionResponse.status)
-      return send(res, 502, { error: 'Oxirgi sayt nashri holatini olib bo‘lmadi.' })
+      // 404 = hali birinchi nashr qilinmagan (normal holat). Boshqa xatolar tokenga/repoga oid.
+      const failure = await explainGithubFailure(versionResponse, 'Oxirgi nashr holatini olib bo‘lmadi')
+      return send(res, 502, failure)
     }
 
     const countResponse = await fetch(
@@ -68,7 +92,8 @@ export default async function handler(req, res) {
       return send(res, 502, { error: 'Supabase kutilayotgan o‘zgarishlar sonini noto‘g‘ri qaytardi.' })
     }
 
-    return send(res, 200, { pendingChanges, publishedAt: since })
+    const run = await latestRun(admin.githubToken)
+    return send(res, 200, { pendingChanges, publishedAt: since, run })
   } catch (error) {
     console.error('[publish-status] Nashr holatini tekshirishda xatolik:', error)
     return send(res, 500, { error: 'Nashr holatini tekshirishda server xatoligi yuz berdi.' })
