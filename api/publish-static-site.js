@@ -21,8 +21,16 @@ export default async function handler(req, res) {
   try {
     const admin = await verifyActiveAdmin(req)
     if (!admin.ok) return send(res, admin.status, { error: admin.error })
+    const mode = req.body?.mode ?? 'changes'
+    if (mode !== 'full' && mode !== 'changes') {
+      return send(res, 400, { error: 'Yuklash turi noto‘g‘ri.' })
+    }
+
     const expectedVersion = req.body?.expectedVersion
-    if (typeof expectedVersion !== 'string' || !/^[a-f0-9]{64}$/.test(expectedVersion)) {
+    if (expectedVersion !== undefined && (
+      typeof expectedVersion !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(expectedVersion)
+    )) {
       return send(res, 400, { error: 'Taqqoslash versiyasi noto‘g‘ri. Qaytadan solishtiring.' })
     }
 
@@ -33,7 +41,10 @@ export default async function handler(req, res) {
         headers: githubHeaders(admin.githubToken, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           ref: SITE_BRANCH,
-          inputs: { expected_version: expectedVersion },
+          inputs: {
+            publish_mode: mode,
+            ...(expectedVersion ? { expected_version: expectedVersion } : {}),
+          },
         }),
       }
     )
@@ -43,9 +54,9 @@ export default async function handler(req, res) {
     }
 
     return send(res, 202, {
-      message:
-        'Taqqoslangan sayt ma’lumotlari nashr qilinmoqda. ' +
-        'Snapshot va kerakli rasm fayllari repoga joylanadi; sayt tugagach avtomatik yangilanadi.',
+      message: mode === 'full'
+        ? 'Supabase’dagi to‘liq baza va barcha rasm fayllari repodagi sayt ma’lumotlarini almashtirib yuklanmoqda.'
+        : 'Supabase’dagi o‘zgarishlar va kerakli yangi rasm fayllari saytga yuklanmoqda.',
     })
   } catch (error) {
     console.error('[publish] Nashrni boshlashda xatolik:', error)
