@@ -21,13 +21,20 @@ export default async function handler(req, res) {
   try {
     const admin = await verifyActiveAdmin(req)
     if (!admin.ok) return send(res, admin.status, { error: admin.error })
+    const expectedVersion = req.body?.expectedVersion
+    if (typeof expectedVersion !== 'string' || !/^[a-f0-9]{64}$/.test(expectedVersion)) {
+      return send(res, 400, { error: 'Taqqoslash versiyasi noto‘g‘ri. Qaytadan solishtiring.' })
+    }
 
     const dispatchResponse = await fetch(
       `https://api.github.com/repos/${SITE_REPOSITORY}/actions/workflows/${PUBLISH_WORKFLOW}/dispatches`,
       {
         method: 'POST',
         headers: githubHeaders(admin.githubToken, { 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ ref: SITE_BRANCH }),
+        body: JSON.stringify({
+          ref: SITE_BRANCH,
+          inputs: { expected_version: expectedVersion },
+        }),
       }
     )
     if (!dispatchResponse.ok) {
@@ -37,8 +44,8 @@ export default async function handler(req, res) {
 
     return send(res, 202, {
       message:
-        'Nashr boshlandi: savollar va rasmlar Supabase’dan olinib sayt repozitoriyasiga yuklanmoqda. ' +
-        'Tugagach Vercel saytni avtomatik yangilaydi.',
+        'Taqqoslangan sayt ma’lumotlari nashr qilinmoqda. ' +
+        'Rasm fayllari repoga yuklanmaydi; sayt tugagach avtomatik yangilanadi.',
     })
   } catch (error) {
     console.error('[publish] Nashrni boshlashda xatolik:', error)

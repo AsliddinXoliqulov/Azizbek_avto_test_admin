@@ -16,6 +16,80 @@ interface PublishRun {
   createdAt: number
 }
 
+interface PublishPreviewItem {
+  action: 'added' | 'updated' | 'deleted'
+  label: string
+}
+
+interface PublishPreviewGroup {
+  title: string
+  added: number
+  updated: number
+  deleted: number
+  total: number
+  items: PublishPreviewItem[]
+  omitted: number
+}
+
+interface PublishPreview {
+  currentVersion: string | null
+  snapshotVersion: string
+  hasChanges: boolean
+  totalChanges: number
+  snapshotBytes: number
+  changes: PublishPreviewGroup[]
+  imageChanges: { added: number; updated: number; deleted: number }
+  warningCount: number
+}
+
+function isPublishPreviewItem(value: unknown): value is PublishPreviewItem {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Record<string, unknown>
+  return (
+    (item.action === 'added' || item.action === 'updated' || item.action === 'deleted') &&
+    typeof item.label === 'string'
+  )
+}
+
+function isPublishPreviewGroup(value: unknown): value is PublishPreviewGroup {
+  if (!value || typeof value !== 'object') return false
+  const group = value as Record<string, unknown>
+  return (
+    typeof group.title === 'string' &&
+    ['added', 'updated', 'deleted', 'total', 'omitted'].every(
+      (key) => Number.isSafeInteger(group[key]) && Number(group[key]) >= 0
+    ) &&
+    Array.isArray(group.items) &&
+    group.items.every(isPublishPreviewItem)
+  )
+}
+
+function isPublishPreview(value: unknown): value is PublishPreview {
+  if (!value || typeof value !== 'object') return false
+  const preview = value as Record<string, unknown>
+  const imageChanges = preview.imageChanges
+  return (
+    (preview.currentVersion === null || typeof preview.currentVersion === 'string') &&
+    typeof preview.snapshotVersion === 'string' &&
+    typeof preview.hasChanges === 'boolean' &&
+    Number.isSafeInteger(preview.totalChanges) &&
+    Number(preview.totalChanges) >= 0 &&
+    Number.isSafeInteger(preview.snapshotBytes) &&
+    Number(preview.snapshotBytes) >= 0 &&
+    Number.isSafeInteger(preview.warningCount) &&
+    Number(preview.warningCount) >= 0 &&
+    Array.isArray(preview.changes) &&
+    preview.changes.every(isPublishPreviewGroup) &&
+    Boolean(imageChanges) &&
+    typeof imageChanges === 'object' &&
+    ['added', 'updated', 'deleted'].every(
+      (key) =>
+        Number.isSafeInteger((imageChanges as Record<string, unknown>)[key]) &&
+        Number((imageChanges as Record<string, unknown>)[key]) >= 0
+    )
+  )
+}
+
 const isRunActive = (run: PublishRun | null) =>
   run !== null && ['queued', 'in_progress', 'waiting', 'requested', 'pending'].includes(run.status)
 
@@ -29,6 +103,10 @@ export default function Codes() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [publishPreview, setPublishPreview] = useState<PublishPreview | null>(null)
+  const [previewError, setPreviewError] = useState('')
   const [pendingChanges, setPendingChanges] = useState<number | null>(null)
   const [publishRun, setPublishRun] = useState<PublishRun | null>(null)
   const wasRunActive = useRef(false)
@@ -122,8 +200,8 @@ export default function Codes() {
   }, [])
 
   const runActive = isRunActive(publishRun)
-  const publishDisabled =
-    publishing || runActive || pendingChanges === null || pendingChanges === 0
+  const compareDisabled =
+    publishing || previewLoading || runActive
 
   // Nashr ishlayotganida holatni tez-tez (5 s), aks holda kamdan-kam (30 s) tekshiramiz.
   useEffect(() => {
@@ -151,8 +229,58 @@ export default function Codes() {
     wasRunActive.current = runActive
   }, [runActive, publishRun, t])
 
-  async function publishWebsiteData() {
-    if (publishDisabled) return
+  function closePublishPreview() {
+    if (publishing) return
+    setShowPreview(false)
+    setPublishPreview(null)
+    setPreviewError('')
+  }
+
+  async function compareWebsiteData() {
+    if (compareDisabled) return
+    setShowPreview(true)
+    setPreviewLoading(true)
+    setPublishPreview(null)
+    setPreviewError('')
+    setError('')
+    setSuccess('')
+    try {
+      const { data, error: sessionError } = await requireSupabase().auth.getSession()
+      if (sessionError) throw sessionError
+      const accessToken = data.session?.access_token
+      if (!accessToken) throw new Error(t('Admin sessiyasi topilmadi.'))
+
+      const response = await fetch('/api/static-site-publish-preview', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(
+          typeof result.error === 'string'
+            ? result.error
+            : t('GitHub va Supabase ma’lumotlarini taqqoslab bo‘lmadi.')
+        )
+      }
+      if (!isPublishPreview(result)) {
+        throw new Error(t('Taqqoslash xizmati noto‘g‘ri javob qaytardi.'))
+      }
+      setPublishPreview(result)
+    } catch (reason) {
+      setPreviewError(getErrorMessage(reason))
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  function submitPublishPreview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!publishPreview?.hasChanges || publishing || previewLoading) return
+    void publishWebsiteData(publishPreview.snapshotVersion)
+  }
+
+  async function publishWebsiteData(expectedVersion: string) {
+    if (publishing || runActive) return
     setPublishing(true)
     setError('')
     setSuccess('')
@@ -164,7 +292,11 @@ export default function Codes() {
 
       const response = await fetch('/api/publish-static-site', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expectedVersion }),
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -182,6 +314,8 @@ export default function Codes() {
       wasRunActive.current = true
       dispatchedAt.current = Date.now()
       setPublishRun({ status: 'queued', conclusion: null, url: '', createdAt: Date.now() })
+      setShowPreview(false)
+      setPublishPreview(null)
       window.setTimeout(() => void loadPublishStatus(), 4_000)
     } catch (reason) {
       setError(getErrorMessage(reason))
@@ -403,21 +537,21 @@ export default function Codes() {
               )}
               <button
                 type="button"
-                className={`button button-quiet publish-icon-button${publishing || runActive ? ' is-publishing' : ''}`}
-                onClick={() => void publishWebsiteData()}
-                disabled={publishDisabled}
-                aria-busy={publishing || runActive}
-                aria-label={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
-                title={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : 'Sayt ma’lumotlarini birlashtirib nashr qilish')}
+                className={`button button-quiet publish-icon-button${publishing || previewLoading || runActive ? ' is-publishing' : ''}`}
+                onClick={() => void compareWebsiteData()}
+                disabled={compareDisabled}
+                aria-busy={publishing || previewLoading || runActive}
+                aria-label={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : previewLoading ? 'Sayt ma’lumotlari solishtirilmoqda' : 'GitHub va Supabase ma’lumotlarini solishtirish')}
+                title={t(publishing || runActive ? 'Nashr jarayoni bajarilmoqda' : previewLoading ? 'Sayt ma’lumotlari solishtirilmoqda' : 'GitHub va Supabase ma’lumotlarini solishtirish')}
               >
-                {publishing || runActive ? (
+                {publishing || previewLoading || runActive ? (
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="8" />
                   </svg>
                 ) : (
                   <wa-icon name="share-nodes" aria-hidden="true"></wa-icon>
                 )}
-                <span>{t(publishing || runActive ? 'Nashr…' : 'Birlashtirish')}</span>
+                <span>{t(publishing || runActive ? 'Nashr…' : previewLoading ? 'Solishtirilmoqda…' : 'Solishtirish')}</span>
               </button>
             </div>
           </div>
@@ -431,6 +565,40 @@ export default function Codes() {
         />
       )}
       {success && <Notice message={success} kind="success" onClose={() => setSuccess('')} />}
+      {showPreview && (
+        <Modal
+          title="Sayt ma’lumotlarini solishtirish"
+          onClose={closePublishPreview}
+          onSubmit={submitPublishPreview}
+          busy={publishing}
+          submitLabel="Yuklash"
+          submitDisabled={previewLoading || !publishPreview?.hasChanges}
+          className="publish-preview-modal"
+        >
+          {previewLoading && (
+            <div className="publish-preview-loading" role="status" aria-live="polite">
+              <span className="publish-preview-spinner" aria-hidden="true" />
+              <span>{t('GitHub va Supabase ma’lumotlari solishtirilmoqda…')}</span>
+            </div>
+          )}
+          {previewError && (
+            <div className="publish-preview-error">
+              <Notice message={previewError} />
+              <button
+                type="button"
+                className="button button-quiet"
+                onClick={() => void compareWebsiteData()}
+                disabled={previewLoading}
+              >
+                {t('Qayta solishtirish')}
+              </button>
+            </div>
+          )}
+          {publishPreview && (
+            <PublishPreviewContent preview={publishPreview} language={language} />
+          )}
+        </Modal>
+      )}
       <section className="panel-card table-panel">
         <div className="filter-bar">
           <div className="filter-tabs">
@@ -522,6 +690,86 @@ export default function Codes() {
       </section>
       {showCreate && <CreateCode platform={platform} onClose={() => setShowCreate(false)} onCreated={(code) => { setShowCreate(false); setSuccess(t('Yangi aktivatsiya kodi: {0}').replace('{0}', code)); void load() }} />}
     </>
+  )
+}
+
+function PublishPreviewContent({
+  preview,
+  language,
+}: {
+  preview: PublishPreview
+  language: string
+}) {
+  const { t } = useSiteLanguage()
+  const imageChangeCount =
+    preview.imageChanges.added + preview.imageChanges.updated + preview.imageChanges.deleted
+  const megabytes = preview.snapshotBytes / (1024 * 1024)
+  const formattedMegabytes = megabytes.toLocaleString(
+    language === 'ru' ? 'ru-RU' : 'uz-UZ',
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  )
+
+  return (
+    <div className="publish-preview-content">
+      <div className="publish-preview-stats">
+        <div>
+          <strong>{preview.totalChanges.toLocaleString(language)}</strong>
+          <span>{t('Farq')}</span>
+        </div>
+        <div>
+          <strong>{formattedMegabytes} MB</strong>
+          <span>{t('Yangi snapshot hajmi')}</span>
+        </div>
+        <div>
+          <strong>{imageChangeCount.toLocaleString(language)}</strong>
+          <span>{t('Rasm havolasi farqi')}</span>
+        </div>
+      </div>
+      <p className="publish-preview-note">
+        {t('Hajm siqilmagan snapshot fayli bo‘yicha; Git uzatish hajmi farq qilishi mumkin. Rasm fayllari repoga yuklanmaydi.')}
+      </p>
+      {!preview.hasChanges ? (
+        <p className="publish-preview-empty">{t('GitHub bilan farq topilmadi. Yuklanadigan o‘zgarish yo‘q.')}</p>
+      ) : (
+        <div className="publish-preview-groups">
+          {preview.changes.map((group) => (
+            <section className="publish-preview-group" key={group.title}>
+              <div className="publish-preview-group-heading">
+                <h3>{t(group.title)}</h3>
+                <span>
+                  +{group.added.toLocaleString(language)} ·
+                  {' '}{t('o‘zgardi')} {group.updated.toLocaleString(language)} ·
+                  {' '}{t('o‘chirildi')} {group.deleted.toLocaleString(language)}
+                </span>
+              </div>
+              {group.items.length > 0 && (
+                <ul>
+                  {group.items.map((item, index) => (
+                    <li key={`${group.title}-${item.action}-${index}`}>
+                      <span className={`publish-preview-action is-${item.action}`}>
+                        {t(item.action === 'added' ? 'Yangi' : item.action === 'deleted' ? 'O‘chirildi' : 'O‘zgardi')}
+                      </span>
+                      <span>{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {group.omitted > 0 && (
+                <p className="publish-preview-omitted">
+                  {t('Yana {0} ta o‘zgarish bor.').replace('{0}', group.omitted.toLocaleString(language))}
+                </p>
+              )}
+            </section>
+          ))}
+          {preview.warningCount > 0 && (
+            <p className="publish-preview-warning">
+              {t('{0} ta rasm havolasi yaroqsiz deb topildi va nashr snapshotidan chiqariladi.')
+                .replace('{0}', preview.warningCount.toLocaleString(language))}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
