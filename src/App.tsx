@@ -21,7 +21,6 @@ import type { AdminProfile } from './lib/types'
 import { getErrorMessage } from './lib/types'
 import { useSiteLanguage } from './lib/siteLanguage'
 import type { SiteLanguage } from './lib/siteLanguage'
-import PwaInstallButton from './components/PwaInstallButton'
 import { Notice, ToastProvider } from './components/Notice'
 import Dashboard from './pages/Dashboard'
 import Questions from './pages/Questions'
@@ -264,7 +263,6 @@ function Login() {
                 : t('Login va parol bilan kirish')}
           </button>
         </form>
-        <PwaInstallButton variant="login" />
       </section>
     </main>
   )
@@ -408,7 +406,6 @@ function AdminLayout({
             </button>
             <div className="admin-topbar-actions">
               <SiteLanguageSwitcher />
-              <PwaInstallButton />
               <div className="profile-menu-wrap" ref={profileMenuRef}>
                 <button
                   type="button"

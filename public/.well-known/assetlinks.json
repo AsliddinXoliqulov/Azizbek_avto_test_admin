@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.azizbek_avto_test_admin.twa",
+        "sha256_cert_fingerprints": ["A9:37:CD:26:30:2F:4B:F1:7A:9D:94:E6:8C:6B:2D:1B:6F:5F:65:BF:C3:F3:CA:6F:64:0E:24:80:44:AE:23:8A"]
+      }
+    }]

@@ -17,9 +17,6 @@
   --navy: #172237;
   --admin-wallpaper: url('/app-theme-dark.png');
 }
-.pwa-install-button span {
-  display: none;
-}
 
 * {
   box-sizing: border-box;
@@ -4379,75 +4376,6 @@ td {
   color: #eef1f7;
   background: #ffffff0b;
 }
-.profile-install-action {
-  color: #f0c45a;
-}
-.profile-install-action:hover:not(:disabled) {
-  color: #ffda7a;
-  background: #edba4a14;
-}
-.profile-install-help {
-  line-height: 1.5;
-}
-.pwa-install-wrap {
-  position: relative;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-.pwa-install-button {
-  display: inline-flex;
-  width: calc(40px * var(--admin-ui-font-scale, 1));
-  min-width: calc(40px * var(--admin-ui-font-scale, 1));
-  height: calc(40px * var(--admin-ui-font-scale, 1));
-  min-height: calc(40px * var(--admin-ui-font-scale, 1));
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid #f0c45a55;
-  border-radius: calc(11px * var(--admin-ui-font-scale, 1));
-  color: #f0c45a;
-  background: #edba4a12;
-  font: inherit;
-  font-size: calc((10px) * var(--admin-ui-font-scale, 1));
-  font-weight: 700;
-  white-space: nowrap;
-}
-.pwa-install-button:hover {
-  color: #ffda7a;
-  background: #edba4a20;
-}
-.pwa-install-button svg {
-  width: calc(17px * var(--admin-ui-font-scale, 1));
-  height: calc(17px * var(--admin-ui-font-scale, 1));
-  flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-.pwa-install-help {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 80;
-  width: min(280px, calc(100vw - 24px));
-  padding: 10px 12px;
-  border: 1px solid #ffffff20;
-  border-radius: 10px;
-  color: #dce4f2;
-  background: #182130;
-  box-shadow: 0 8px 24px #0005;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.pwa-install-button-login {
-  margin-top: calc(12px * var(--admin-ui-font-scale, 1));
-}
-.pwa-install-wrap-login {
-  display: flex;
-  justify-content: center;
-}
 .profile-signout-action {
   margin-top: calc(3px * var(--admin-ui-font-scale, 1));
   color: #f2a0a9;
@@ -5097,27 +5025,6 @@ td {
 :root[data-theme='light'] .profile-dropdown-action:hover:not(:disabled) {
   color: #263248;
   background: #f1f4f9;
-}
-:root[data-theme='light'] .profile-install-action {
-  color: #946b10;
-}
-:root[data-theme='light'] .profile-install-action:hover:not(:disabled) {
-  color: #76530a;
-  background: #edba4a20;
-}
-:root[data-theme='light'] .pwa-install-button {
-  border-color: #b9851455;
-  color: #946b10;
-  background: #edba4a20;
-}
-:root[data-theme='light'] .pwa-install-button:hover {
-  color: #76530a;
-  background: #edba4a30;
-}
-:root[data-theme='light'] .pwa-install-help {
-  border-color: #dce3ed;
-  color: #263248;
-  background: #fff;
 }
 :root[data-theme='light'] .profile-signout-action {
   color: #c74655;

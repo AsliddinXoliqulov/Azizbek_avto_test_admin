@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     return send(res, 202, {
       message:
         'Taqqoslangan sayt ma’lumotlari nashr qilinmoqda. ' +
-        'Rasm fayllari repoga yuklanmaydi; sayt tugagach avtomatik yangilanadi.',
+        'Snapshot va kerakli rasm fayllari repoga joylanadi; sayt tugagach avtomatik yangilanadi.',
     })
   } catch (error) {
     console.error('[publish] Nashrni boshlashda xatolik:', error)

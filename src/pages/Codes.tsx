@@ -34,9 +34,11 @@ interface PublishPreviewGroup {
 interface PublishPreview {
   currentVersion: string | null
   snapshotVersion: string
+  fullUploadRequired: boolean
   hasChanges: boolean
   totalChanges: number
-  snapshotBytes: number
+  uploadBytes: number
+  imageUploadBytes: number
   changes: PublishPreviewGroup[]
   imageChanges: { added: number; updated: number; deleted: number }
   warningCount: number
@@ -71,11 +73,14 @@ function isPublishPreview(value: unknown): value is PublishPreview {
   return (
     (preview.currentVersion === null || typeof preview.currentVersion === 'string') &&
     typeof preview.snapshotVersion === 'string' &&
+    typeof preview.fullUploadRequired === 'boolean' &&
     typeof preview.hasChanges === 'boolean' &&
     Number.isSafeInteger(preview.totalChanges) &&
     Number(preview.totalChanges) >= 0 &&
-    Number.isSafeInteger(preview.snapshotBytes) &&
-    Number(preview.snapshotBytes) >= 0 &&
+    Number.isSafeInteger(preview.uploadBytes) &&
+    Number(preview.uploadBytes) >= 0 &&
+    Number.isSafeInteger(preview.imageUploadBytes) &&
+    Number(preview.imageUploadBytes) >= 0 &&
     Number.isSafeInteger(preview.warningCount) &&
     Number(preview.warningCount) >= 0 &&
     Array.isArray(preview.changes) &&
@@ -703,8 +708,13 @@ function PublishPreviewContent({
   const { t } = useSiteLanguage()
   const imageChangeCount =
     preview.imageChanges.added + preview.imageChanges.updated + preview.imageChanges.deleted
-  const megabytes = preview.snapshotBytes / (1024 * 1024)
+  const megabytes = preview.uploadBytes / (1024 * 1024)
+  const imageMegabytes = preview.imageUploadBytes / (1024 * 1024)
   const formattedMegabytes = megabytes.toLocaleString(
+    language === 'ru' ? 'ru-RU' : 'uz-UZ',
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  )
+  const formattedImageMegabytes = imageMegabytes.toLocaleString(
     language === 'ru' ? 'ru-RU' : 'uz-UZ',
     { minimumFractionDigits: 2, maximumFractionDigits: 2 }
   )
@@ -718,7 +728,11 @@ function PublishPreviewContent({
         </div>
         <div>
           <strong>{formattedMegabytes} MB</strong>
-          <span>{t('Yangi snapshot hajmi')}</span>
+          <span>
+            {preview.fullUploadRequired
+              ? t('To‘liq baza — bir martalik')
+              : t('Faqat o‘zgarishlar')}
+          </span>
         </div>
         <div>
           <strong>{imageChangeCount.toLocaleString(language)}</strong>
@@ -726,7 +740,12 @@ function PublishPreviewContent({
         </div>
       </div>
       <p className="publish-preview-note">
-        {t('Hajm siqilmagan snapshot fayli bo‘yicha; Git uzatish hajmi farq qilishi mumkin. Rasm fayllari repoga yuklanmaydi.')}
+        {t('Birinchi nashr to‘liq baza, keyingi nashrlar faqat o‘zgarishlar bo‘ladi. Umumiy hajm snapshot/delta va yangi rasm fayllarini o‘z ichiga oladi.')}
+        {' '}
+        {t('Repoga qo‘shiladigan yangi rasm fayllari: {0} MB').replace(
+          '{0}',
+          formattedImageMegabytes
+        )}
       </p>
       {!preview.hasChanges ? (
         <p className="publish-preview-empty">{t('GitHub bilan farq topilmadi. Yuklanadigan o‘zgarish yo‘q.')}</p>
